@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/logo.png" width="128" alt="月华 logo">
+  <img src="logo.png" width="128" alt="月华 logo">
 </p>
 
 # 月华 · Moon Beautify
