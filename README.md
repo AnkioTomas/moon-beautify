@@ -1,6 +1,10 @@
-# Moon Beautify · 月读美化扩展
+<p align="center">
+  <img src="docs/logo.png" width="128" alt="月华 logo">
+</p>
 
-给 [月读（Moon / book.koplugin）](https://github.com/AnkioTomas/moon) 的首页加一组纯展示的「吧唧」组件，同时在外观里面有组件背景/边框，组件合并，底栏图标这些功能。
+# 月华 · Moon Beautify
+
+月读（Moon）的美化扩展。给 [月读（Moon / book.koplugin）](https://github.com/AnkioTomas/moon) 的首页加一组纯展示的「吧唧」组件，同时在外观里面有组件背景/边框，组件合并，底栏图标这些功能。
 
 **不联网、不改月读本体**。所有补丁都是运行时轻量替换且带兜底——月读升级导致接口变化时，最多是功能失效退回原生外观，不会影响启动。配置存在扩展自己的 `settings/ext.beautify.lua` 里，卸载插件不丢配置。
 
@@ -77,7 +81,7 @@
 1. 需要 KOReader **2026.07+** 且已安装月读（book.koplugin）
 2. 从 [Releases](../../releases) 下载 `moon-beautify-<版本>.zip` 并解压（或 `Code → Download ZIP` 后解压）
 3. 把解压出来的 **`moon-beautify.koplugin` 文件夹**整个放进 KOReader 插件目录（与 `book.koplugin` 同级）
-4. 重启月读，在「拓展」页启用 **美化 / Moon Beautify**
+4. 重启月读，在「拓展」页启用 **美化 / Moon Beautify**（月华）
 5. 首页长按空白处进入编辑态 → 添加 → 选 **吧唧 / 吧唧 2 / 吧唧 3 / 吧唧 4**
 
 > 月读的首页组件按 id 唯一，四个吧唧就是四个独立实例：各有各的图、形状、特效、贴图与转动设置。
