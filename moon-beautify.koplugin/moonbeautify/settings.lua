@@ -10,6 +10,10 @@ local lfs = require("libs/libkoreader-lfs")
 local UIManager = require("ui/uimanager")
 local List = require("ui.themes.widgets.list")
 local Row = require("ui.themes.widgets.row")
+local Button = require("ui.themes.widgets.button")
+local UITheme = require("ui.themes")
+local HorizontalGroup = require("ui/widget/horizontalgroup")
+local HorizontalSpan = require("ui/widget/horizontalspan")
 local Spin = require("ui.themes.widgets.spin")
 local Input = require("ui.themes.widgets.input")
 local Overlay = require("desktop.pages.setting.overlay")
@@ -388,7 +392,7 @@ local function tabList(desktop)
     local tabs = desktop and desktop._tabs
     if type(tabs) == "table" then
         for _idx, tab in ipairs(tabs) do
-            out[#out + 1] = { id = tab.id, text = tab.text or tab.id }
+            out[#out + 1] = { id = tab.id, text = tab.text or tab.id, icon = type(tab.icon) == "string" and tab.icon or nil }
         end
     end
     if #out == 0 then
@@ -400,6 +404,8 @@ local function tabList(desktop)
     end
     return out
 end
+
+local refreshOverlayPage -- 前置声明，定义在 themePageTable 之后
 
 --- 单个底栏格子的图标：选图 / 恢复默认
 ---@param desktop table|nil
@@ -418,6 +424,7 @@ local function tabIconDialog(desktop, tab)
                 conf.tab_icons[tab.id] = path
                 Store.save()
                 repaint(desktop)
+                refreshOverlayPage(desktop)
             end)
         elseif value == "reset" then
             local conf = Store.conf()
@@ -426,36 +433,10 @@ local function tabIconDialog(desktop, tab)
                 if next(conf.tab_icons) == nil then conf.tab_icons = nil end
                 Store.save()
                 repaint(desktop)
+                refreshOverlayPage(desktop)
             end
         end
     end)
-end
-
---- 底栏图标总入口
----@param desktop table|nil
-local function tabIconsPage(desktop)
-    local conf = Store.conf()
-    local map = type(conf.tab_icons) == "table" and conf.tab_icons or {}
-    local items = {}
-    for _idx, tab in ipairs(tabList(desktop)) do
-        items[#items + 1] = {
-            value = tab.id,
-            text = tab.text,
-            mandatory = map[tab.id] and _("自定义") or nil,
-        }
-    end
-    List:new{
-        title = _("底栏图标"),
-        subtitle = _("建议用方形单色小图标（PNG），会缩到图标大小"),
-        items = items,
-        current = nil,
-        centered = true,
-        on_select = function(id)
-            for _i, tab in ipairs(tabList(desktop)) do
-                if tab.id == id then return tabIconDialog(desktop, tab) end
-            end
-        end,
-    }:show()
 end
 
 --- 组件清单：月读首页注册表（内置 + 扩展）
@@ -575,8 +556,6 @@ local function widgetBgPage(desktop)
     end)
 end
 
-local refreshThemePage -- 前置声明，定义在 themePageTable 之后
-
 --- 轻提示（KOReader 原生 InfoMessage：左侧信息图标，点一下即关，默认 2 秒自动消失）
 ---@param text string
 ---@param seconds number|nil
@@ -590,8 +569,6 @@ local function themeToast(text, seconds)
         })
     end)
 end
-
-local tabOrderPage -- 前置声明：moveTab 移动完要重开本页
 
 --- 当前顺序数组：用户配置里还存在的格子按配置排，没配的按默认顺序补在后面
 ---@param desktop table|nil
@@ -615,89 +592,88 @@ local function currentTabOrder(desktop)
     return out
 end
 
---- id -> 显示名
+--- 底栏页的一行：左侧图标（自定义图优先），右侧 设置 / 上移 / 下移，和阅读页底部状态栏同一套交互。
 ---@param desktop table|nil
----@param id string
----@return string
-local function tabName(desktop, id)
-    for _idx, tab in ipairs(tabList(desktop)) do
-        if tab.id == id then return tab.text end
-    end
-    return id
-end
-
---- 单个格子的移动：上移 / 下移
----@param desktop table|nil
----@param order string[] 当前顺序（会被修改并保存）
----@param index integer 要移动的格子
----@param delta integer -1 上移 / 1 下移
-local function moveTab(desktop, order, index, delta)
-    local to = index + delta
-    if to < 1 or to > #order then
-        themeToast(delta < 0 and _("已经在最前面了") or _("已经在最后面了"))
-        return
-    end
-    order[index], order[to] = order[to], order[index]
-    Store.conf().tab_order = order
-    Store.save()
-    repaint(desktop)
-    tabOrderPage(desktop)   -- 重开本页让列表反映新顺序
-end
-
---- 底栏图标顺序编辑页
----@param desktop table|nil
-function tabOrderPage(desktop)
-    if not desktop then
-        themeToast(_("回到桌面后再设置"))
-        return
-    end
-    local order = currentTabOrder(desktop)
-    local conf = Store.conf()
-    local custom = type(conf.tab_order) == "table" and #conf.tab_order > 0 or false
-    local items = {}
-    for i, id in ipairs(order) do
-        items[#items + 1] = {
-            value = tostring(i),
-            text = tabName(desktop, id),
-            mandatory = tostring(i),
+---@param tab table { id, text, icon }
+---@param order string[]
+---@param index integer
+---@return fun(iw: number): table
+local function tabRow(desktop, tab, order, index)
+    return function(iw)
+        local map = Store.conf().tab_icons
+        local custom = type(map) == "table" and type(map[tab.id]) == "string" and map[tab.id] ~= "" and map[tab.id] or nil
+        local size = UITheme.px(36)
+        local function arrow(icon, enabled, callback)
+            return Button:new{
+                icon = icon, variant = "ghost", width = size, height = size,
+                enabled = enabled, callback = callback,
+            }
+        end
+        local function shift(delta)
+            local to = index + delta
+            order[index], order[to] = order[to], order[index]
+            Store.conf().tab_order = order
+            Store.save()
+            repaint(desktop)
+            refreshOverlayPage(desktop)
+        end
+        local trailing = HorizontalGroup:new{
+            align = "center",
+            arrow("settings", true, function() tabIconDialog(desktop, tab) end),
+            HorizontalSpan:new{ width = UITheme.px(4) },
+            arrow("arrow_upward", index > 1, function() shift(-1) end),
+            HorizontalSpan:new{ width = UITheme.px(4) },
+            arrow("arrow_downward", index < #order, function() shift(1) end),
         }
+        return Row.widget({
+            width = iw,
+            chevron = false,
+            icon = not custom and (tab.icon or "dashboard") or nil,
+            image = custom,
+            title = tab.text,
+            subtitle = custom and _("自定义图标") or nil,
+            status = trailing,
+        })
     end
-    items[#items + 1] = {
-        value = "reset",
-        text = _("恢复默认顺序"),
-        mandatory = custom and _("按月读原来的排列") or nil,
-        enabled = custom,
-        separator = true,
-    }
-    List:new{
-        title = _("图标顺序"),
-        subtitle = _("点一个图标，选上移或下移"),
-        items = items,
-        current = nil,
-        centered = true,
-        on_select = function(value)
-            if value == "reset" then
-                Store.conf().tab_order = nil
-                Store.save()
-                repaint(desktop)
-                themeToast(_("已恢复默认顺序"))
-                return
+end
+
+--- 底栏页：每个格子一行，设置里换图标，上下箭头调顺序
+---@param desktop table|nil
+---@return table page
+local function tabBarPage(desktop)
+    return {
+        title = _("底栏"),
+        sections = function()
+            local order = currentTabOrder(desktop)
+            local byId = {}
+            for _idx, tab in ipairs(tabList(desktop)) do byId[tab.id] = tab end
+            local rows = {}
+            for i, id in ipairs(order) do
+                rows[#rows + 1] = tabRow(desktop, byId[id] or { id = id, text = id }, order, i)
             end
-            local index = tonumber(value)
-            if not index then return end
-            local id = order[index]
-            choose(tabName(desktop, id), {
-                { value = "up", text = _("上移一位"), enabled = index > 1 },
-                { value = "down", text = _("下移一位"), enabled = index < #order },
-            }, nil, function(v)
-                if v == "up" then
-                    moveTab(desktop, order, index, -1)
-                elseif v == "down" then
-                    moveTab(desktop, order, index, 1)
-                end
-            end)
+            local ordered = type(Store.conf().tab_order) == "table" and #Store.conf().tab_order > 0
+            return {
+                { title = _("图标"), rows = rows },
+                { title = _("恢复"), rows = {
+                    function(iw)
+                        return Row.widget({
+                            width = iw, chevron = false, kind = "action", icon = "restart_alt",
+                            title = _("恢复默认顺序"),
+                            subtitle = ordered and _("按月读原来的排列") or nil,
+                            enabled = ordered,
+                            callback = function()
+                                Store.conf().tab_order = nil
+                                Store.save()
+                                repaint(desktop)
+                                refreshOverlayPage(desktop)
+                                themeToast(_("已恢复默认顺序"))
+                            end,
+                        })
+                    end,
+                } },
+            }
         end,
-    }:show()
+    }
 end
 
 --- 保存当前配置为主题
@@ -721,7 +697,7 @@ local function themeSave(desktop)
             local ok, dir_or_err = Theme.save(safe)
             if ok then
                 put(desktop, "active_theme", safe)
-                refreshThemePage(desktop)
+                refreshOverlayPage(desktop)
                 themeToast(T(_("已保存为主题：%1"), safe))
             else
                 themeToast(T(_("保存失败：%1"), dir_or_err or ""))
@@ -754,7 +730,7 @@ local function themeImport(desktop)
             local Theme = require("moonbeautify.theme")
             local ok, name_or_err = Theme.importZip(path)
             if ok then
-                refreshThemePage(desktop)
+                refreshOverlayPage(desktop)
                 themeToast(T(_("已导入主题：%1"), name_or_err))
             else
                 themeToast(T(_("导入失败：%1"), name_or_err or ""))
@@ -781,7 +757,7 @@ local function themeItem(desktop, name, active)
         if v == "apply" then
             local ok, err = Theme.apply(name)
             if ok then
-                refreshThemePage(desktop)
+                refreshOverlayPage(desktop)
                 repaint(desktop)
                 themeToast(_("已使用该主题"))
             else
@@ -799,7 +775,7 @@ local function themeItem(desktop, name, active)
         elseif v == "delete" then
             local ok, err = Theme.delete(name)
             if ok then
-                refreshThemePage(desktop)
+                refreshOverlayPage(desktop)
                 themeToast(_("已删除主题"))
             elseif err == "beautify_in_use" then
                 themeToast(_("应用中删除失败，请先应用其他主题"))
@@ -876,7 +852,7 @@ end
 
 --- 让当前主题页重新取数据（sections 是函数，rebuild 会重新调用）
 ---@param desktop table|nil
-function refreshThemePage(desktop)
+function refreshOverlayPage(desktop)
     if not desktop then return end
     local ov = desktop.settings_overlay
     if not ov then return end
@@ -1069,12 +1045,9 @@ function Settings.entries(desktop)
                     function() Overlay.push(desktop, themePageTable(desktop)) end),
             } },
             { title = _("底栏"), rows = {
-                link("dashboard", _("底栏图标"),
-                    tab_count > 0 and T(_("已自定义 %1 个"), tab_count) or _("用图片替换底栏图标"),
-                    function() tabIconsPage(desktop) end),
-                link("swap_vert", _("图标顺序"),
-                    custom_order and _("底栏图标已重新排列") or _("调整底栏图标的先后"),
-                    function() tabOrderPage(desktop) end),
+                link("dashboard", _("底栏图标与顺序"),
+                    (tab_count > 0 or custom_order) and _("已自定义图标或顺序") or _("换图标、调顺序"),
+                    function() Overlay.push(desktop, tabBarPage(desktop)) end),
             } },
             { title = _("首页组件"), rows = {
                 link("image", _("组件背景"),
