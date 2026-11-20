@@ -4,7 +4,7 @@
 契约（api = 1，id = ext.<name>，provides.source = false）：
   home_widgets 简写表 { id, title, icon, build = fun(ctx, w, h), heightRange = fun(ctx, opts), settings = fun(desktop, id) }
   build 返回占满 w × h 的控件；settings 让首页编辑态出现设置按钮（设置里抛错会被月读记日志）。
-  provides.features.setting 往「设置 → 外观」加两行入口。
+  provides.features.setting 往「设置 → 外观」顶部加「月华美化」入口，点开是扩展自己的页面。
 组件 id 由月读补成 ext.beautify.<短名>，发布后不要改。
 
 --]]

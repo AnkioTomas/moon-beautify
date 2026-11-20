@@ -1,6 +1,6 @@
 return {
     name = "moonbeautify",
-    fullname = "美化 / Moon Beautify",
+    fullname = "月华 / Moon Beautify",
     version = "0.1.2",
     description = [[月读扩展：给首页加纯展示的吧唧组件。
 
@@ -17,6 +17,6 @@ return {
 不联网、不改月读本体；设置存在扩展自己的配置（settings/ext.beautify.lua）里，
 卸载插件不丢配置。组件只读，点按无动作。
 
-更新：设置 → 系统 → 「美化（版本）」，里面有自动检查开关和手动检查，
+更新：设置 → 外观 → 顶部的「月华美化（版本）」，里面有自动检查开关和手动检查，
 发现新版可直接在月读里下载安装并重启，不需要手动换文件。]],
 }

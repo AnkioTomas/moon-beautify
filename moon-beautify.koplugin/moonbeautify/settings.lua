@@ -1029,160 +1029,99 @@ local function rowsPage(desktop)
     }:show()
 end
 
---- 月读设置页（外观分组）里的两行入口。
+--- 月读设置页（外观分组顶部）的「月华美化」入口，点开后是扩展自己的页面。
 ---@param desktop table|nil
 ---@return table[]
 function Settings.entries(desktop)
-    local conf = Store.conf()
-    local tab_map = type(conf.tab_icons) == "table" and conf.tab_icons or {}
-    local tab_count = 0
-    for _k in pairs(tab_map) do tab_count = tab_count + 1 end
-    local bg_map = type(conf.widget_bg) == "table" and conf.widget_bg or {}
-    local bg_count = 0
-    for _k in pairs(bg_map) do bg_count = bg_count + 1 end
-    local row_count = type(conf.rows) == "table" and #conf.rows or 0
-    local lace_map = type(conf.widget_lace) == "table" and conf.widget_lace or {}
-    local lace_count = 0
-    for _k in pairs(lace_map) do lace_count = lace_count + 1 end
+    local Update = require("moonbeautify.update")
+    local ver = Update.version()
+    local title = ver and T(_("月华美化（%1）"), ver) or _("月华美化")
+
+    local function count(map)
+        local n = 0
+        if type(map) == "table" then for _k in pairs(map) do n = n + 1 end end
+        return n
+    end
+
+    local function link(icon, name, subtitle, open)
+        return function(iw)
+            return Row.widget({
+                width = iw, icon = icon, title = name, subtitle = subtitle,
+                chevron = true, callback = open,
+            })
+        end
+    end
+
+    local function sections()
+        local conf = Store.conf()
+        local tab_count = count(conf.tab_icons)
+        local bg_count = count(conf.widget_bg)
+        local lace_count = count(conf.widget_lace)
+        local row_count = type(conf.rows) == "table" and #conf.rows or 0
+        local custom_order = type(conf.tab_order) == "table" and #conf.tab_order > 0
+        local theme_count = #require("moonbeautify.theme").list()
+        local auto = Update.autoEnabled()
+        return {
+            { title = _("主题"), rows = {
+                link("save", _("主题"),
+                    theme_count > 0 and T(_("%1 套已保存，可随时切换"), theme_count)
+                        or _("整套美化连图片存档、分享、一键切换"),
+                    function() Overlay.push(desktop, themePageTable(desktop)) end),
+            } },
+            { title = _("底栏"), rows = {
+                link("dashboard", _("底栏图标"),
+                    tab_count > 0 and T(_("已自定义 %1 个"), tab_count) or _("用图片替换底栏图标"),
+                    function() tabIconsPage(desktop) end),
+                link("swap_vert", _("图标顺序"),
+                    custom_order and _("底栏图标已重新排列") or _("调整底栏图标的先后"),
+                    function() tabOrderPage(desktop) end),
+            } },
+            { title = _("首页组件"), rows = {
+                link("image", _("组件背景"),
+                    bg_count > 0 and T(_("已设置 %1 个组件"), bg_count) or _("给首页组件加背景图"),
+                    function() widgetBgPage(desktop) end),
+                link("border_style", _("组件花边"),
+                    lace_count > 0 and T(_("%1 个组件已配"), lace_count) or _("给首页组件加一圈花边"),
+                    function() widgetLacePage(desktop) end),
+                link("view_column", _("并排组合"),
+                    row_count > 0 and T(_("已有 %1 组"), row_count) or _("两个组件挤同一行"),
+                    function() rowsPage(desktop) end),
+            } },
+            { title = _("更新"), rows = {
+                function(iw)
+                    return Row.widget({
+                        width = iw, chevron = false, kind = "toggle", icon = "update",
+                        title = _("自动检查更新"),
+                        subtitle = _("每天最多一次，发现新版本时弹窗提示"),
+                        status = auto and _("开") or _("关"), status_on = auto,
+                        callback = function()
+                            Update.setAuto(not auto)
+                            if desktop then pcall(function() desktop:updateView() end) end
+                        end,
+                    })
+                end,
+                function(iw)
+                    return Row.widget({
+                        width = iw, chevron = false, kind = "action", icon = "settings_suggest",
+                        title = _("检查更新"),
+                        status = ver or "", status_on = true,
+                        callback = function() Update.check(false) end,
+                    })
+                end,
+            } },
+        }
+    end
+
     return {
         {
-            id = "tab_icons",
+            id = "main",
             group = "appearance",
-            order = 40,
-            row = function(iw)
-                return Row.widget({
-                    width = iw,
-                    icon = "dashboard",
-                    title = _("底栏图标"),
-                    subtitle = tab_count > 0 and T(_("已自定义 %1 个"), tab_count) or _("用图片替换底栏图标"),
-                    chevron = true,
-                    callback = function() tabIconsPage(desktop) end,
-                })
-            end,
+            order = 1,
+            icon = "auto_awesome",
+            title = title,
+            subtitle = _("主题、底栏、组件背景与花边"),
+            page = { title = title, sections = sections },
         },
-        {
-            id = "tab_order",
-            group = "appearance",
-            order = 40.5,
-            row = function(iw)
-                local custom = type(conf.tab_order) == "table" and #conf.tab_order > 0 or false
-                return Row.widget({
-                    width = iw,
-                    icon = "swap_vert",
-                    title = _("图标顺序"),
-                    subtitle = custom and _("底栏图标已重新排列") or _("调整底栏图标的先后"),
-                    chevron = true,
-                    callback = function() tabOrderPage(desktop) end,
-                })
-            end,
-        },
-        {
-            id = "widget_bg",
-            group = "appearance",
-            order = 42,
-            row = function(iw)
-                return Row.widget({
-                    width = iw,
-                    icon = "image",
-                    title = _("组件背景"),
-                    subtitle = bg_count > 0 and T(_("已设置 %1 个组件"), bg_count) or _("给首页组件加背景图"),
-                    chevron = true,
-                    callback = function() widgetBgPage(desktop) end,
-                })
-            end,
-        },
-        {
-            id = "widget_lace",
-            group = "appearance",
-            order = 42,
-            row = function(iw)
-                return Row.widget({
-                    width = iw,
-                    icon = "border_style",
-                    title = _("组件花边"),
-                    subtitle = lace_count > 0 and T(_("%1 个组件已配"), lace_count) or _("给首页组件加一圈花边"),
-                    chevron = true,
-                    callback = function() widgetLacePage(desktop) end,
-                })
-            end,
-        },
-        {
-            id = "rows",
-            group = "appearance",
-            order = 43,
-            row = function(iw)
-                return Row.widget({
-                    width = iw,
-                    icon = "view_column",
-                    title = _("并排组合"),
-                    subtitle = row_count > 0 and T(_("已有 %1 组"), row_count) or _("两个组件挤同一行"),
-                    chevron = true,
-                    callback = function() rowsPage(desktop) end,
-                })
-            end,
-        },
-        {
-            id = "theme",
-            group = "appearance",
-            order = 44,
-            row = function(iw)
-                local themes = require("moonbeautify.theme").list()
-                local count = #themes
-                return Row.widget({
-                    width = iw,
-                    icon = "save",
-                    title = _("主题"),
-                    subtitle = count > 0 and T(_("%1 套已保存，可随时切换"), count)
-                        or _("整套美化连图片存档、分享、一键切换"),
-                    chevron = true,
-                    callback = function() Overlay.push(desktop, themePageTable(desktop)) end,
-                })
-            end,
-        },
-        -- 扩展自己的设置页（设置 → 系统 → 本机 → 美化），更新检查放这里，不混进外观
-        (function()
-            local Update = require("moonbeautify.update")
-            local ver = Update.version()
-            local title = ver and T(_("美化（%1）"), ver) or _("美化")
-            return {
-                id = "main",
-                group = "system",
-                order = 56,
-                icon = "settings_suggest",
-                title = title,
-                subtitle = _("外观增强"),
-                page = {
-                    title = title,
-                    sections = function()
-                        local on = Update.autoEnabled()
-                        return {
-                            { title = _("更新"), rows = {
-                                function(iw)
-                                    return Row.widget({
-                                        width = iw, chevron = false, kind = "toggle", icon = "update",
-                                        title = _("自动检查更新"),
-                                        subtitle = _("每天最多一次，发现新版本时弹窗提示"),
-                                        status = on and _("开") or _("关"), status_on = on,
-                                        callback = function()
-                                            Update.setAuto(not on)
-                                            if desktop then pcall(function() desktop:updateView() end) end
-                                        end,
-                                    })
-                                end,
-                                function(iw)
-                                    return Row.widget({
-                                        width = iw, chevron = false, kind = "action", icon = "settings_suggest",
-                                        title = _("检查更新"),
-                                        status = ver or "", status_on = true,
-                                        callback = function() Update.check(false) end,
-                                    })
-                                end,
-                            } },
-                        }
-                    end,
-                },
-            }
-        end)(),
     }
 end
 
