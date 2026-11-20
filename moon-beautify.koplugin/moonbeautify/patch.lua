@@ -234,13 +234,13 @@ local function patchHome()
         return slot
     end
 
-    local origRefresh = Base.refresh
+    -- 整体替换 refresh：重建内容后重新套装饰
     Base.refresh = function(self)
         local slot = self.slot
         if not slot then return end
         local old = slot[1]
         slot[1] = decorate(self, self:createWidget())
-        old:free()
+        if old then old:free() end
         self:dirty()
     end
 end

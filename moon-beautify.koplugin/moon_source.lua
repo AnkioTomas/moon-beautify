@@ -31,10 +31,9 @@ pcall(function() require("moonbeautify.update").install() end)
 --- 这样改尺寸只动吧唧大小，不会把整页排版顶来顶去。
 local RATIO = 0.62
 
----@param prefix string 配置前缀，如 "badge_" / "badge2_"
 ---@param opts table|nil { width }
 ---@return { height: number }
-local function heightOf(prefix, opts)
+local function heightOf(opts)
     local w = (opts and opts.width) or 540
     return { height = math.max(60, math.floor(w * RATIO)) }
 end
@@ -50,7 +49,7 @@ local function badgeWidget(id, title)
         id = id, -- 月读补成 ext.beautify.<id>
         title = _(title),
         icon = "image",
-        heightRange = function(_ctx, opts) return heightOf(prefix, opts) end,
+        heightRange = function(_ctx, opts) return heightOf(opts) end,
         build = function(_ctx, w, h)
             return require("moonbeautify.view").badge(w, h, prefix)
         end,

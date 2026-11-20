@@ -68,11 +68,7 @@ end
 Rows.cleanGroups = cleanGroups
 
 --- 单组件的占位高度（内容 + 上下边距），与原生 packHeight 同口径
----@param raw table
----@return integer
-local function packHeight(raw)
-    return Layout.packHeight(raw)
-end
+local packHeight = Layout.packHeight
 
 --- 把一页的 ranges 折成「行」：普通组件自成一行，组合合成一行
 ---@param ranges table[]
@@ -256,6 +252,7 @@ function Rows.install()
             return origBuild(ctx, components, page, opts)
         end
         local ok, body, p, pages, visible = pcall(Rows.build, ctx, components, page, opts, groups)
+        Rows.dense = nil -- build 中途抛错时不能残留半宽状态
         if ok then return body, p, pages, visible end
         return origBuild(ctx, components, page, opts)
     end

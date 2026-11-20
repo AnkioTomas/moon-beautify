@@ -86,6 +86,8 @@ function Theme.sanitize(name)
     name = name:gsub("_+$", ""):gsub("^_+", "")
     if name == "" then return nil end
     if #name > 48 then name = name:sub(1, 48) end
+    -- 纯点名会指向 root 或其上级，.import- 是导入暂存目录的保留前缀
+    if name:match("^%.+$") or name:sub(1, 8) == ".import-" then return nil end
     return name
 end
 
@@ -256,10 +258,12 @@ end
 ---@param assetsDir string
 ---@return integer copied 收编的文件数
 ---@return string|nil first 第一张收编的文件名（当封面用）
+---@return string|nil err 写入失败原因
 local function collectAssets(conf, assetsDir)
     local used = usedNames(assetsDir)
     local copied = 0
     local first = nil
+    local err
     local seen = {}  -- 源路径 → assets 文件名
     walk(conf, function(s)
         local ext = s:lower():match("%.(%w+)$")
@@ -274,15 +278,22 @@ local function collectAssets(conf, assetsDir)
         local base = s:match("([^/\\]+)$") or "asset.bin"
         local asset = uniqueName(used, base)
         local dest = io.open(assetsDir .. "/" .. asset, "wb")
-        if not dest then return s end
-        dest:write(data)
-        dest:close()
+        if not dest then
+            err = err or ("写不了图片 " .. asset)
+            return s
+        end
+        local wok = dest:write(data)
+        local cok = dest:close()
+        if not (wok and cok) then
+            err = err or ("写图片失败 " .. asset)
+            return s
+        end
         seen[s] = asset
         copied = copied + 1
         if not first then first = asset end
         return ASSET_MARK .. asset
     end)
-    return copied, first
+    return copied, first, err
 end
 
 --- @assets/ 引用换回主题目录下的绝对路径
@@ -517,20 +528,39 @@ function Theme.save(name)
     if not mkdirp(dir) then
         return false, "建不了主题目录"
     end
-    removeTree(dir .. "/assets")
-    if not lfs.mkdir(dir .. "/assets") then return false, "建不了 assets 目录" end
+    -- 配置里的图片可能正指向本主题旧的 assets，所以先写到临时位置，全部成功后再替换
+    local newAssets = dir .. "/.assets-new"
+    local tmpFile = dir .. "/.theme.lua.new"
+    removeTree(newAssets)
+    if not lfs.mkdir(newAssets) then return false, "建不了 assets 目录" end
     local conf = snapshotConf()
-    local copied, first = collectAssets(conf, dir .. "/assets")
-    local file, werr = io.open(dir .. "/theme.lua", "w")
-    if not file then return false, werr or "写不了 theme.lua" end
-    file:write(serialize({
+    local copied, first, cerr = collectAssets(conf, newAssets)
+    if cerr then
+        removeTree(newAssets)
+        return false, cerr
+    end
+    local file, werr = io.open(tmpFile, "w")
+    if not file then
+        removeTree(newAssets)
+        return false, werr or "写不了 theme.lua"
+    end
+    local wok = file:write(serialize({
         kind = THEME_KIND,          -- 格式标识：导入时先认身份
         version = THEME_FORMAT,     -- 格式版本：将来 conf 键结构升级时做迁移判断
         name = safe,
         conf = conf,
         cover = first and (ASSET_MARK .. first) or nil,   -- 列表缩略图
     }))
-    file:close()
+    local cok = file:close()
+    if not (wok and cok) then
+        removeTree(newAssets)
+        os.remove(tmpFile)
+        return false, "写 theme.lua 失败"
+    end
+    removeTree(dir .. "/assets")
+    if not os.rename(newAssets, dir .. "/assets") or not os.rename(tmpFile, dir .. "/theme.lua") then
+        return false, "替换主题文件失败"
+    end
     note("moonbeautify theme saved", safe, copied .. " assets")
     return true, dir
 end
@@ -714,11 +744,19 @@ function Theme.importZip(zipPath)
     local fromFile = zipName and zipName:match("^(.*)%.[%w]+$") or zipName
     local name = Theme.sanitize(cname or fromFile) or "theme"
     local dest = root .. "/" .. name
-    removeTree(dest)
+    -- 先把旧主题挪开，新主题就位后再删；失败时还原，避免覆盖导入丢掉旧主题
+    local backup = staging .. "-old"
+    local hadOld = lfs.attributes(dest, "mode") ~= nil
+    if hadOld and not os.rename(dest, backup) then
+        removeTree(staging)
+        return false, "挪不开旧主题"
+    end
     if not os.rename(base, dest) then
+        if hadOld then os.rename(backup, dest) end
         removeTree(staging)
         return false, "挪不进主题目录"
     end
+    if hadOld then removeTree(backup) end
     removeTree(staging)
     note("moonbeautify theme imported", name, zipPath)
     return true, name

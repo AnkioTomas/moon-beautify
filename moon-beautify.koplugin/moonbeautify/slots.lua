@@ -24,12 +24,6 @@ function Slots.indices()
     return { 1, 2, 3, 4, 5, 6, 7, 8 }
 end
 
---- 并排时会被藏起来的四角格
----@return number[]
-function Slots.hidden()
-    return { 1, 4, 5, 8 }
-end
-
 local function blank(w, h)
     return Widget:new{ dimen = Geom:new{ w = w, h = h } }
 end
